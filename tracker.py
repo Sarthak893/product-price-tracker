@@ -1,102 +1,78 @@
-import requests
-from bs4 import BeautifulSoup
 import sqlite3
 from datetime import datetime
+import logging
 
-DB_NAME = "prices.db"
+# ================================
+# CONFIGURE LOGGING
+# ================================
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
-# ------------------------------
-# Database Functions
-# ------------------------------
-def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS price_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_name TEXT,
-            url TEXT,
-            price REAL,
-            timestamp TEXT
-        )
-    ''')
+# ================================
+# DATABASE SETUP
+# ================================
+conn = sqlite3.connect('prices.db')
+cursor = conn.cursor()
+
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS prices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        url TEXT NOT NULL,
+        price TEXT NOT NULL,
+        date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+''')
+conn.commit()
+
+# ================================
+# DB OPERATIONS
+# ================================
+def save_to_db(url, price):
+    logging.info(f"Saving to DB: URL={url}, Price={price}")
+    cursor.execute(
+        "INSERT INTO prices (url, price, date) VALUES (?, ?, ?)",
+        (url, price, datetime.now())
+    )
     conn.commit()
-    conn.close()
+    logging.info("Saved successfully.")
 
-def insert_price(product_name, url, price):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('''
-        INSERT INTO price_history (product_name, url, price, timestamp)
-        VALUES (?, ?, ?, ?)
-    ''', (product_name, url, price, datetime.now().isoformat()))
-    conn.commit()
-    conn.close()
-
-def get_history():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM price_history ORDER BY timestamp DESC')
-    rows = c.fetchall()
-    conn.close()
-    return rows
-
-# ------------------------------
-# Scraping Function
-# ------------------------------
-def scrape_price(url):
-    headers = {"User-Agent": "Mozilla/5.0"}
-    res = requests.get(url, headers=headers)
-    if res.status_code != 200:
-        print(f"Error fetching page: {res.status_code}")
-        return None, None
-
-    soup = BeautifulSoup(res.text, "html.parser")
-
-    # For Books to Scrape
-
-    product_name = soup.find("div", class_="product_main").h1.get_text().strip()
-    price_string = soup.find("p", class_="price_color").get_text().strip()
-    print(f"[DEBUG] Raw price string : {price_string}")
-
-    # Price is like '£51.77'
-    price_numeric=''.join(c for c in price_string if c.isdigit() or c == '.')
-    price_value = float(price_numeric)
-
-    return product_name, price_value
-
-# ------------------------------
-# Main CLI
-# ------------------------------
-def main():
-    init_db()
-
-    print("=== Price Tracker ===")
-    print("1. Track new product URL")
-    print("2. Show history")
-    choice = input("Choose an option (1 or 2): ")
-
-    if choice == '1':
-        url = input("Enter product URL: ").strip()
-        try:
-            name, price = scrape_price(url)
-            if name and price:
-                print(f"\nProduct: {name}")
-                print(f"Price: £{price}")
-                insert_price(name, url, price)
-                print("✅ Price saved to database.\n")
-            else:
-                print("⚠️ Could not extract product details.")
-        except Exception as e:
-            print(f"Error: {e}")
-
-    elif choice == '2':
-        history = get_history()
-        print("\n=== Price History ===")
-        for row in history:
-            print(f"{row[4]} | {row[1]} | £{row[3]} | {row[2]}")
+def view_price_history():
+    logging.info("Fetching price history from DB")
+    cursor.execute("SELECT * FROM prices")
+    rows = cursor.fetchall()
+    if not rows:
+        print("No price history found.")
     else:
-        print("Invalid choice.")
+        for row in rows:
+            print(row)
 
-if __name__ == '__main__':
-    main()
+# ================================
+# CLI MENU
+# ================================
+def main_menu():
+    while True:
+        print("\n--- Product Price Tracker CLI ---")
+        print("1. Add Product Price")
+        print("2. View Price History")
+        print("3. Exit")
+        choice = input("Enter choice: ").strip()
+
+        logging.info(f"User selected option {choice}")
+
+        if choice == "1":
+            url = input("Enter product URL: ").strip()
+            price = input("Enter product price: ").strip()
+            save_to_db(url, price)
+        elif choice == "2":
+            view_price_history()
+        elif choice == "3":
+            logging.info("Exiting application.")
+            break
+        else:
+            print("Invalid choice. Please enter 1, 2, or 3.")
+
+if __name__ == "__main__":
+    main_menu()
+0
