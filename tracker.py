@@ -51,12 +51,27 @@ def view_price_history():
 # ================================
 # CLI MENU
 # ================================
+def search_by_url(url):
+    logging.info(f"Searching price history for URL: {url}")
+    cursor.execute("SELECT * FROM prices WHERE url = ?", (url,))
+    results = cursor.fetchall()
+    
+    if not results:
+        print("No entries found for this URL.")
+    else:
+        print(f"\nPrice history for {url}:")
+        for row in results:
+            print(row)
+
 def main_menu():
     while True:
         print("\n--- Product Price Tracker CLI ---")
         print("1. Add Product Price")
         print("2. View Price History")
-        print("3. Exit")
+        print("3. Search Price History by URL")
+        print("4. Exit")
+
+        
         choice = input("Enter choice: ").strip()
 
         logging.info(f"User selected option {choice}")
@@ -68,6 +83,9 @@ def main_menu():
         elif choice == "2":
             view_price_history()
         elif choice == "3":
+            url = input("Enter product URL to search: ").strip()
+            search_by_url(url)
+        elif choice == "4":
             logging.info("Exiting application.")
             break
         else:
